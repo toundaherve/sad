@@ -14,7 +14,7 @@ const Button = styled(BootstrapButton)`
   }
 `;
 
-function Home() {
+function HomePage() {
   return (
     <div
       className="d-flex flex-column align-items-stretch"
@@ -77,4 +77,4 @@ function Home() {
   );
 }
 
-export default Home;
+export default HomePage;
