@@ -1,5 +1,6 @@
 import React, { MouseEvent, ReactNode, useEffect, useRef, useState } from "react"
 import { useForm } from "react-hook-form"
+import { Link } from "react-router-dom"
 import { Button, Input } from "reactstrap"
 
 type Account = {
@@ -51,7 +52,7 @@ function SignupPage() {
                                 <span className="d-flex flex-column justify-content-center flex-grow-1 flex-shrink-1 align-items-start align-self-stretch" style={{minWidth: "56px", minHeight: "32px", flexBasis: "50%"}}>
                                     {visiblePreviousButton && <Button disabled={disabledPreviousButton} onClick={handlePreviousButtonClick}>Previous</Button>}
                                 </span>
-                                <span>Logo</span>
+                                <span><Link to="/">Logo</Link></span>
                                 <span className="d-flex flex-column justify-content-center flex-grow-1 flex-shrink-1 align-items-end align-self-stretch" style={{minWidth: "56px", minHeight: "32px", flexBasis: "50%"}}>
                                     {visibleNextButton && <Button disabled={disabledNextButton} innerRef={nextButtonRef}>Next</Button>}
                                 </span>

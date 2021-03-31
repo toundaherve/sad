@@ -1,16 +1,21 @@
 import React from "react";
-import { Button as BootstrapButton } from "reactstrap";
+import { Link } from "react-router-dom";
+import { Button } from "reactstrap";
 import styled from "styled-components";
 
-const Button = styled(BootstrapButton)`
+const StyledLink = styled(Link)`
   max-width: 380px;
+  width: 100%;
   @media only screen and (min-width: 576px) {
-    width: 100%;
-    margin-right: ${(props) => props.isLeft && "16px !important"};
+    &:first-child {
+      margin-right: 20px; 
+    }
   }
   @media only screen and (min-width: 992px) {
-    width: auto%;
-    margin-right: ${(props) => props.isLeft && "0 !important"};
+    &:first-child {
+      margin-right: 0; 
+    }
+    width: auto;
   }
 `;
 
@@ -40,16 +45,18 @@ function HomePage() {
             </h1>
             <h2 className="h4 fw-bold text-break mb-4">Join Twitter today.</h2>
             <div className="d-flex flex-column flex-sm-row flex-lg-column align-items-stretch">
-              <Button
-                isLeft={true}
-                className="mb-3"
-                style={{ maxWidth: "380px" }}
-              >
-                Sign up
-              </Button>
-              <Button className="mb-3" style={{ maxWidth: "380px" }}>
-                Log in
-              </Button>
+              <StyledLink to="/signup">
+                <Button
+                  className="mb-3 w-100"
+                >
+                  Sign up
+                </Button>
+                </StyledLink>
+              <StyledLink to="/">
+                <Button className="mb-3 w-100" >
+                  Log in
+                </Button>
+              </StyledLink>
             </div>
           </div>
         </div>
