@@ -1,5 +1,6 @@
-import React, { MouseEvent, ReactNode, useEffect, useRef, useState } from "react"
+import React, {  ReactNode, useEffect, useRef, useState } from "react"
 import { useForm } from "react-hook-form"
+import useFetch from "use-http"
 import { Link } from "react-router-dom"
 import { Button, Input } from "reactstrap"
 
@@ -42,6 +43,10 @@ function SignupPage() {
         }
     }
 
+    function alertError() {
+      alert("Sorry, there is an error...")
+    }
+
     return (
         <div className="d-flex flex-column align-items-stretch min-vh-100">
             <div className="d-flex flex-column align-items-stretch flex-grow-1 flex-shrink-0 mx-auto w-100" style={{maxWidth: "600px"}}>
@@ -61,7 +66,7 @@ function SignupPage() {
                     </div>
                 </div>
                 
-               {currentStep === "account_creation" && <AccountCreationForm onSuccessAccountCreation={handleSuccessAccountCreation} />}
+               {currentStep === "account_creation" && <AccountCreationForm onSuccessAccountCreation={handleSuccessAccountCreation} onError={alertError} />}
                {currentStep === "email_verification" && <EmailVerificationForm email={account.email} onValidCode={() => setDisabledNextButton(false)} onInvalidCode={() => setDisabledNextButton(true)} submitButtonRef={nextButtonRef} onSuccess={handleSuccessEmailVerification} />}
                {currentStep === "password_creation" && <PasswordCreationForm onValidPassword={() => setDisabledNextButton(false)} onInvalidPassword={() => setDisabledNextButton(true)} submitButtonRef={nextButtonRef} onSuccess={() => { alert("Done!!") }} />}
             </div>
@@ -71,12 +76,14 @@ function SignupPage() {
 
 type AccountCreationFormProps = {
     onSuccessAccountCreation: (data: Account) => void
+    onError: () => void
 }
 
-function AccountCreationForm({onSuccessAccountCreation}: AccountCreationFormProps) {
-    const {register, errors, getValues,trigger} = useForm<Account>()
+function AccountCreationForm({onSuccessAccountCreation, onError}: AccountCreationFormProps) {
+    const {register, errors, getValues, trigger} = useForm<Account>()
+    const {get, response, loading} = useFetch("http://192.168.1.69:8001") 
     const [checkingEmailTakenDone, setCheckingEmailTakenDone] = useState(false)
-    const [emailTaken, setEmailTaken] = useState(false)
+    const [emailTaken, setEmailTaken] = useState<Boolean>(false)
     const [buttonDisactivated, setButtonDisactivated] = useState(true)
 
     let typingTimer: NodeJS.Timeout
@@ -86,19 +93,12 @@ function AccountCreationForm({onSuccessAccountCreation}: AccountCreationFormProp
         const name = e.currentTarget.name as keyof Account
         clearTimeout(typingTimer)
         typingTimer = setTimeout( async() => {
-            const validEmail = await trigger(name)
-            if (validEmail) {
-                console.log("Verifying email available")
-                setTimeout(() => {
-                    setCheckingEmailTakenDone(true)
-                    setEmailTaken(false)
-                    activateButton()
-                }, 1000)
-                activateButton()
-            }
+          await trigger(name)
+          tryActivateButton()
         }, doneTypingInterval)
-        activateButton()
     }
+
+    
 
     function handleKeyDown(e: React.FormEvent<HTMLInputElement>){
         clearTimeout(typingTimer)
@@ -106,15 +106,17 @@ function AccountCreationForm({onSuccessAccountCreation}: AccountCreationFormProp
 
     function handleChange(e : React.FormEvent<HTMLInputElement>) {
         const name = e.currentTarget.name as keyof Account
-        trigger(name).then(() => activateButton())
+        trigger(name).then(() => tryActivateButton())
     }
 
-    function handleBlur(e: React.FormEvent<HTMLInputElement>) {
-        const name = e.currentTarget.name as keyof Account
-        trigger(name).then(() => activateButton())
-    }
+    async function handleEmailBlur(e: React.FormEvent<HTMLInputElement>) {
+      const name = e.currentTarget.name as keyof Account
+      trigger(name).then(() => tryActivateButton())
+      handleEmailAvailable()
+  }
 
-    function activateButton() {
+
+    function tryActivateButton() {
         const values = getValues()
        const allFieldsFilled = Object.keys(values).every((key)  => values[key as keyof Account] !== "")
        const noErrors = Object.keys(errors).length === 0
@@ -126,33 +128,38 @@ function AccountCreationForm({onSuccessAccountCreation}: AccountCreationFormProp
        }
     }
 
-    function handleSubmit() {
-        console.log("Loading !!!")
-        console.log("Sending request")
-        setTimeout(() => {
-            console.log("Response back")
-            onSuccessAccountCreation(getValues())
-            console.log("Stopped loading")
-        }, 3000)
+    async function handleSubmit() {
+      onSuccessAccountCreation(getValues())
+    }
+
+    async function handleEmailAvailable() {
+      // const data: {taken: Boolean} = await get(`/api/users/email_available?${getValues().email}`)
+      // if (!response.ok) {
+      //   onError()
+      //   return
+      // }
+      setCheckingEmailTakenDone(true)
+      setEmailTaken(false)
+      tryActivateButton()
     }
 
     return (
         <FormTemplate title="Create your Account">
             <div className="" style={{paddingTop: "12px", paddingBottom: "12px"}}>
-                <Input placeholder="Name" type="text" name="name" innerRef={register({required: true, maxLength: 50})} onChange={handleChange}  onBlur={handleBlur} />
+                <Input placeholder="Name" type="text" name="name" innerRef={register({required: true, maxLength: 50})}  onChange={handleChange} />
                 {errors.name && <small className="text-danger">Please provide a name.</small>}
             </div>
             <div className="" style={{paddingTop: "12px", paddingBottom: "12px"}}>
-                <Input placeholder="Email" type="email" name="email" innerRef={register({required: true, pattern: /^(([^<>()\[\]\\.,;:\s@"]+(\.[^<>()\[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/})} onKeyUp={handleKeyUp} onKeyDown={handleKeyDown} onBlur={handleBlur}   />
+                <Input placeholder="Email" type="email" name="email" innerRef={register({required: true, pattern: /^(([^<>()\[\]\\.,;:\s@"]+(\.[^<>()\[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/})} onKeyUp={handleKeyUp} onKeyDown={handleKeyDown} onBlur={handleEmailBlur}   />
                 {errors.email && <small className="text-danger">Please provide a valid email.</small>}
-                {checkingEmailTakenDone && emailTaken && <small className="text-danger">Email already taken.</small> }
+                {!errors.email && checkingEmailTakenDone && emailTaken && <small className="text-danger">Email already taken.</small> }
             </div>
             <div className="" style={{paddingTop: "12px", paddingBottom: "12px"}}>
-                <Input placeholder="Country" type="text" name="country" innerRef={register({required: true})} onChange={handleChange} onBlur={handleBlur}   />
+                <Input placeholder="Country" type="text" name="country" innerRef={register({required: true})}  onChange={handleChange}  />
                 {errors.country && <small className="text-danger">Please provide your country.</small>}
             </div>
             <div className="" style={{paddingTop: "12px", paddingBottom: "12px"}}>
-                <Input placeholder="City" type="text" name="city" innerRef={register({required: true})} onChange={handleChange} onBlur={handleBlur}   />
+                <Input placeholder="City" type="text" name="city" innerRef={register({required: true})}  onChange={handleChange}  />
                 {errors.city && <small className="text-danger">Please provide your city.</small>}
             </div>
             <p className="mb-0 p-0" style={{marginTop: "64px"}}>
