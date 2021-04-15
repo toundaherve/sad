@@ -52,7 +52,7 @@ function HomePage() {
                   Sign up
                 </Button>
                 </StyledLink>
-              <StyledLink to="/">
+              <StyledLink to="/login">
                 <Button className="mb-3 w-100" >
                   Log in
                 </Button>
