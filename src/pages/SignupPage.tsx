@@ -4,6 +4,8 @@ import useFetch from "use-http"
 import { Link } from "react-router-dom"
 import { Button, Input } from "reactstrap"
 
+const apiAddress = "http://192.168.1.69:8001"
+
 type Account = {
     name: string;
     email: string;
@@ -14,6 +16,7 @@ type Account = {
 type Step = "account_creation" | "email_verification" | "password_creation"
 
 function SignupPage() {
+    const {get, loading, response} = useFetch(apiAddress)
     const [visibleNextButton, setVisibleNextButton] = useState(false)
     const [visiblePreviousButton, setVisiblePreviousButton] = useState(false)
     const [disabledNextButton, setDisabledNextButton] = useState(true)
@@ -22,11 +25,16 @@ function SignupPage() {
     const [account, setAccount] = useState<Account>({name: "", email: "", country: "", city: ""})
     const nextButtonRef = useRef(null) 
 
-    function handleSuccessAccountCreation(account : Account) {
+    async function handleSuccessAccountCreation(account : Account) {
+      try {
+        await requestEmailVerification(account.email)
         setAccount(account)
         setCurrentStep("email_verification")
         setVisibleNextButton(true)
         setVisiblePreviousButton(true)
+      } catch (error) {
+        alertError()
+      }
     }
 
     function handleSuccessEmailVerification() {
@@ -45,6 +53,14 @@ function SignupPage() {
 
     function alertError() {
       alert("Sorry, there is an error...")
+    }
+
+    async function requestEmailVerification(email: String) {
+      await get(`/api/onboarding/begin_verification?email=${email}`)
+      // await Promise.resolve()
+      if (!response.ok) {
+       throw new Error("")
+      }
     }
 
     return (
@@ -67,7 +83,7 @@ function SignupPage() {
                 </div>
                 
                {currentStep === "account_creation" && <AccountCreationForm onSuccessAccountCreation={handleSuccessAccountCreation} onError={alertError} />}
-               {currentStep === "email_verification" && <EmailVerificationForm email={account.email} onValidCode={() => setDisabledNextButton(false)} onInvalidCode={() => setDisabledNextButton(true)} submitButtonRef={nextButtonRef} onSuccess={handleSuccessEmailVerification} />}
+               {currentStep === "email_verification" && <EmailVerificationForm email={account.email} onValidCode={() => setDisabledNextButton(false)} onInvalidCode={() => setDisabledNextButton(true)} submitButtonRef={nextButtonRef} onSuccess={handleSuccessEmailVerification} onError={alertError} />}
                {currentStep === "password_creation" && <PasswordCreationForm onValidPassword={() => setDisabledNextButton(false)} onInvalidPassword={() => setDisabledNextButton(true)} submitButtonRef={nextButtonRef} onSuccess={() => { alert("Done!!") }} />}
             </div>
         </div>
@@ -80,92 +96,67 @@ type AccountCreationFormProps = {
 }
 
 function AccountCreationForm({onSuccessAccountCreation, onError}: AccountCreationFormProps) {
-    const {register, errors, getValues, trigger} = useForm<Account>()
-    const {get, response, loading} = useFetch("http://192.168.1.69:8001") 
+    const {register, errors, getValues, trigger, formState} = useForm<Account>()
+    const {get, response, loading} = useFetch(apiAddress) 
     const [checkingEmailTakenDone, setCheckingEmailTakenDone] = useState(false)
-    const [emailTaken, setEmailTaken] = useState<Boolean>(false)
+    const [emailTaken, setEmailTaken] = useState<Boolean>(true)
     const [buttonDisactivated, setButtonDisactivated] = useState(true)
 
-    let typingTimer: NodeJS.Timeout
-    let doneTypingInterval = 1000
-    
-    function handleKeyUp( e: React.FormEvent<HTMLInputElement>) {
-        const name = e.currentTarget.name as keyof Account
-        clearTimeout(typingTimer)
-        typingTimer = setTimeout( async() => {
-          await trigger(name)
-          tryActivateButton()
-        }, doneTypingInterval)
-    }
+    useEffect(() => {
+      if (formState.isValid && checkingEmailTakenDone && !emailTaken){
+        setButtonDisactivated(false)
+      } else {
+        setButtonDisactivated(true)
+      }
+    }, [formState, checkingEmailTakenDone, emailTaken])
 
-    
-
-    function handleKeyDown(e: React.FormEvent<HTMLInputElement>){
-        clearTimeout(typingTimer)
-    }
 
     function handleChange(e : React.FormEvent<HTMLInputElement>) {
         const name = e.currentTarget.name as keyof Account
-        trigger(name).then(() => tryActivateButton())
+        trigger(name).then(() => {
+          if (name  === "email" && !errors.email) {
+            handleEmailAvailable()
+          }
+        })
     }
 
-    async function handleEmailBlur(e: React.FormEvent<HTMLInputElement>) {
-      const name = e.currentTarget.name as keyof Account
-      trigger(name).then(() => tryActivateButton())
-      handleEmailAvailable()
-  }
-
-
-    function tryActivateButton() {
-        const values = getValues()
-       const allFieldsFilled = Object.keys(values).every((key)  => values[key as keyof Account] !== "")
-       const noErrors = Object.keys(errors).length === 0
-
-       if (allFieldsFilled && noErrors && checkingEmailTakenDone && !emailTaken) {
-           setButtonDisactivated(false)
-       } else {
-           setButtonDisactivated(true)
-       }
-    }
-
-    async function handleSubmit() {
+    function handleSubmit(e : React.FormEvent<HTMLButtonElement>) {
       onSuccessAccountCreation(getValues())
     }
 
     async function handleEmailAvailable() {
-      // const data: {taken: Boolean} = await get(`/api/users/email_available?${getValues().email}`)
-      // if (!response.ok) {
-      //   onError()
-      //   return
-      // }
+      const data: {taken: Boolean} = await get(`/api/users/email_available?email=${getValues().email.trim()}`)
+      if (!response.ok) {
+        onError()
+        return
+      }
       setCheckingEmailTakenDone(true)
-      setEmailTaken(false)
-      tryActivateButton()
+      setEmailTaken(data.taken)
     }
 
     return (
         <FormTemplate title="Create your Account">
             <div className="" style={{paddingTop: "12px", paddingBottom: "12px"}}>
-                <Input placeholder="Name" type="text" name="name" innerRef={register({required: true, maxLength: 50})}  onChange={handleChange} />
+                <Input placeholder="Name" type="text" name="name" innerRef={register({required: true, maxLength: 50})} onChange={handleChange} onBlur={handleChange}  />
                 {errors.name && <small className="text-danger">Please provide a name.</small>}
             </div>
             <div className="" style={{paddingTop: "12px", paddingBottom: "12px"}}>
-                <Input placeholder="Email" type="email" name="email" innerRef={register({required: true, pattern: /^(([^<>()\[\]\\.,;:\s@"]+(\.[^<>()\[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/})} onKeyUp={handleKeyUp} onKeyDown={handleKeyDown} onBlur={handleEmailBlur}   />
+                <Input placeholder="Email" type="email" name="email" innerRef={register({required: true, pattern: /^(([^<>()\[\]\\.,;:\s@"]+(\.[^<>()\[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/})} onChange={handleChange} onBlur={handleChange} />
                 {errors.email && <small className="text-danger">Please provide a valid email.</small>}
                 {!errors.email && checkingEmailTakenDone && emailTaken && <small className="text-danger">Email already taken.</small> }
             </div>
             <div className="" style={{paddingTop: "12px", paddingBottom: "12px"}}>
-                <Input placeholder="Country" type="text" name="country" innerRef={register({required: true})}  onChange={handleChange}  />
+                <Input placeholder="Country" type="text" name="country" innerRef={register({required: true})}  onChange={handleChange} onBlur={handleChange}  />
                 {errors.country && <small className="text-danger">Please provide your country.</small>}
             </div>
             <div className="" style={{paddingTop: "12px", paddingBottom: "12px"}}>
-                <Input placeholder="City" type="text" name="city" innerRef={register({required: true})}  onChange={handleChange}  />
+                <Input placeholder="City" type="text" name="city" innerRef={register({required: true})} onChange={handleChange} onBlur={handleChange}   />
                 {errors.city && <small className="text-danger">Please provide your city.</small>}
             </div>
             <p className="mb-0 p-0" style={{marginTop: "64px"}}>
                 By signing up, you agree to our <a href="#1">Terms</a>, <a href="#1">Privicy Policy</a>, and <a href="#1">Cookie Use</a>.
             </p>
-            <Button className="mt-3" onClick={handleSubmit} disabled={buttonDisactivated} type="button">Sign up</Button>
+            <Button onClick={handleSubmit} className="mt-3" disabled={buttonDisactivated} type="button">Sign up</Button>
         </FormTemplate>
     )
 }
@@ -176,10 +167,13 @@ type EmailVerificationFormProps = {
     onInvalidCode: () => void;
     submitButtonRef: React.MutableRefObject<HTMLButtonElement | null>;
     onSuccess: () => void
+    onError: () => void
 }
 
-function EmailVerificationForm({email, onValidCode, onInvalidCode, submitButtonRef, onSuccess}: EmailVerificationFormProps) {
+function EmailVerificationForm({email, onValidCode, onInvalidCode, submitButtonRef, onSuccess, onError}: EmailVerificationFormProps) {
+    const {post, loading, response} = useFetch(apiAddress)
     const { watch, register } = useForm<{code : string}>()
+    const [validCode, setValidCode] = useState(true)
     const code = watch("code")
     
     useEffect(() => {
@@ -195,14 +189,18 @@ function EmailVerificationForm({email, onValidCode, onInvalidCode, submitButtonR
         submitButtonRef.current.onclick = handleSubmit
     }
 
-    function handleSubmit(e : globalThis.MouseEvent) {
-        console.log("Loading...")
-        console.log("sending request with code ", code)
-        setTimeout(() => {
-            console.log("response back")
-            onSuccess()
-            console.log("Stopped Loading...")
-        }, 3000)
+    async function handleSubmit(e : globalThis.MouseEvent) {
+      const data: {valid : Boolean} = await post("/api/onboarding/verify_code", {email, code})
+      if (!response.ok) {
+        onError()
+      }
+
+      if (!data.valid) {
+        setValidCode(false)
+      } else {
+        setValidCode(true)
+        onSuccess()
+      }
     }
 
     return (
@@ -210,6 +208,7 @@ function EmailVerificationForm({email, onValidCode, onInvalidCode, submitButtonR
             <p className="m-0 p-0" >Enter it below to verify {email}</p>
             <div className="" style={{paddingTop: "12px", paddingBottom: "12px"}}>
                 <Input placeholder="Verification code" type="number" name="code" innerRef={register({required: true})} />
+                {!validCode && <small className="d-block text-danger">Please a valid code.</small>}
                 <small>Didn't receive email?</small>
             </div>
         </FormTemplate>
