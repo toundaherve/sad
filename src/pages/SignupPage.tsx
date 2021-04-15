@@ -1,7 +1,7 @@
 import React, {  ReactNode, useEffect, useRef, useState } from "react"
 import { useForm } from "react-hook-form"
 import useFetch from "use-http"
-import { Link } from "react-router-dom"
+import { Link, useHistory } from "react-router-dom"
 import { Button, Input } from "reactstrap"
 
 const apiAddress = "http://192.168.1.69:8001"
@@ -17,6 +17,7 @@ type Step = "account_creation" | "email_verification" | "password_creation"
 
 function SignupPage() {
     const {get, loading, response} = useFetch(apiAddress)
+    const history = useHistory()
     const [visibleNextButton, setVisibleNextButton] = useState(false)
     const [visiblePreviousButton, setVisiblePreviousButton] = useState(false)
     const [disabledNextButton, setDisabledNextButton] = useState(true)
@@ -63,6 +64,11 @@ function SignupPage() {
       }
     }
 
+    function handleSignupComplete() {
+      alert("Done!!")
+      history.push("/")
+    }
+
     return (
         <div className="d-flex flex-column align-items-stretch min-vh-100">
             <div className="d-flex flex-column align-items-stretch flex-grow-1 flex-shrink-0 mx-auto w-100" style={{maxWidth: "600px"}}>
@@ -84,7 +90,7 @@ function SignupPage() {
                 
                {currentStep === "account_creation" && <AccountCreationForm onSuccessAccountCreation={handleSuccessAccountCreation} onError={alertError} />}
                {currentStep === "email_verification" && <EmailVerificationForm email={account.email} onValidCode={() => setDisabledNextButton(false)} onInvalidCode={() => setDisabledNextButton(true)} submitButtonRef={nextButtonRef} onSuccess={handleSuccessEmailVerification} onError={alertError} />}
-               {currentStep === "password_creation" && <PasswordCreationForm onValidPassword={() => setDisabledNextButton(false)} onInvalidPassword={() => setDisabledNextButton(true)} submitButtonRef={nextButtonRef} onSuccess={() => { alert("Done!!") }} />}
+               {currentStep === "password_creation" && <PasswordCreationForm account={account} onValidPassword={() => setDisabledNextButton(false)} onInvalidPassword={() => setDisabledNextButton(true)} submitButtonRef={nextButtonRef} onSuccess={handleSignupComplete} onError={alertError} />}
             </div>
         </div>
     )
@@ -216,13 +222,16 @@ function EmailVerificationForm({email, onValidCode, onInvalidCode, submitButtonR
 }
 
 type PasswordCreationFormProps = {
+    account : Account;
     onValidPassword: () => void;
     onInvalidPassword: () => void;
     submitButtonRef: React.MutableRefObject<HTMLButtonElement | null>;
-    onSuccess: () => void
+    onSuccess: () => void;
+    onError: () => void;
 }
 
-function PasswordCreationForm({onValidPassword, onInvalidPassword, submitButtonRef, onSuccess} : PasswordCreationFormProps) {
+function PasswordCreationForm({account, onValidPassword, onInvalidPassword, submitButtonRef, onSuccess, onError} : PasswordCreationFormProps) {
+    const {post, loading, response} = useFetch(apiAddress)
     const {register, watch, trigger} = useForm<{password: string}>()
     const password = watch("password")
 
@@ -241,14 +250,13 @@ function PasswordCreationForm({onValidPassword, onInvalidPassword, submitButtonR
         submitButtonRef.current.onclick = handleSubmit
     }
 
-    function handleSubmit(e : globalThis.MouseEvent) {
-        console.log("Loading...")
-        console.log("sending request with password ", password)
-        setTimeout(() => {
-            console.log("response back")
-            onSuccess()
-            console.log("Stopped Loading...")
-        }, 3000)
+    async function handleSubmit(e : globalThis.MouseEvent) {
+      await post("/api/users", {...account, password})
+      if (!response.ok) {
+          onError()
+          return
+      }
+      onSuccess()
     }
 
     return (
